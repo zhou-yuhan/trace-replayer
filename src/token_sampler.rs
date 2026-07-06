@@ -25,46 +25,10 @@ impl TokenSeparater {
 
         if let Some(class) = config_json.get("tokenizer_class") {
             if class.as_str() == Some("Qwen2Tokenizer") {
-                assert_eq!(
-                    config_json
-                        .get("added_tokens_decoder")
-                        .unwrap()
-                        .get("151643")
-                        .unwrap()
-                        .get("content")
-                        .unwrap()
-                        .as_str()
-                        .unwrap(),
-                    "<|endoftext|>"
-                );
-                assert_eq!(
-                    config_json
-                        .get("added_tokens_decoder")
-                        .unwrap()
-                        .get("151644")
-                        .unwrap()
-                        .get("content")
-                        .unwrap()
-                        .as_str()
-                        .unwrap(),
-                    "<|im_start|>"
-                );
-                assert_eq!(
-                    config_json
-                        .get("added_tokens_decoder")
-                        .unwrap()
-                        .get("151645")
-                        .unwrap()
-                        .get("content")
-                        .unwrap()
-                        .as_str()
-                        .unwrap(),
-                    "<|im_end|>"
-                );
                 return TokenSeparater {
-                    bos_token: (151644, "<|im_start|>".to_owned()),
-                    eos_token: (151645, "<|im_end|>".to_owned()),
-                    pad_token: (151643, "<|endoftext|>".to_owned()),
+                    bos_token: Self::find_added_token(&config_json, "<|im_start|>"),
+                    eos_token: Self::find_added_token(&config_json, "<|im_end|>"),
+                    pad_token: Self::find_added_token(&config_json, "<|endoftext|>"),
                 };
             } else {
                 unimplemented!("Currently support Qwen2/Qwen2.5 class model");
@@ -72,6 +36,27 @@ impl TokenSeparater {
         } else {
             unimplemented!("Currently support Qwen2/Qwen2.5 class model");
         }
+    }
+
+    fn find_added_token(config_json: &Value, content: &str) -> (u32, String) {
+        let added_tokens = config_json
+            .get("added_tokens_decoder")
+            .and_then(Value::as_object)
+            .expect("Qwen tokenizer_config.json must contain added_tokens_decoder");
+
+        let id = added_tokens
+            .iter()
+            .find_map(|(id, token)| {
+                let token_content = token.get("content").and_then(Value::as_str)?;
+                (token_content == content).then_some(id)
+            })
+            .unwrap_or_else(|| panic!("Qwen tokenizer_config.json missing added token {content}"));
+
+        (
+            id.parse::<u32>()
+                .unwrap_or_else(|_| panic!("Invalid token id {id} for added token {content}")),
+            content.to_owned(),
+        )
     }
 }
 
