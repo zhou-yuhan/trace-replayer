@@ -25,7 +25,9 @@ unsafe impl Sync for SpinLock {}
 #[allow(unused)]
 impl SpinLock {
     pub const fn new() -> Self {
-        Self { flag: AtomicBool::new(false) }
+        Self {
+            flag: AtomicBool::new(false),
+        }
     }
 
     /// acuire the lock in blocking manner (spin)
@@ -94,7 +96,9 @@ const READER_MASK: usize = !(WRITER_BIT | WAITER_BIT);
 
 impl SpinRwLock {
     pub const fn new() -> Self {
-        Self { state: AtomicUsize::new(0) }
+        Self {
+            state: AtomicUsize::new(0),
+        }
     }
 
     /// Get read lock, while writer is priorized

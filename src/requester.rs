@@ -175,10 +175,7 @@ pub fn spawn_request_loop_with_timestamp<A: 'static + LLMApi + Send>(
                         metrics.insert("output_length".to_string(), output_length.to_string());
 
                         let span_time = e_time - s_time;
-                        metrics.insert(
-                            "span_time".to_string(),
-                            format!("{span_time:.3}"),
-                        );
+                        metrics.insert("span_time".to_string(), format!("{span_time:.3}"));
                         response_sender.send(metrics).unwrap();
                     }
                     Err(RequestError::Timeout) => {
@@ -195,10 +192,7 @@ pub fn spawn_request_loop_with_timestamp<A: 'static + LLMApi + Send>(
                         metrics.insert("output_length".to_string(), output_length.to_string());
 
                         let span_time = e_time - s_time;
-                        metrics.insert(
-                            "span_time".to_string(),
-                            format!("{span_time:.3}"),
-                        );
+                        metrics.insert("span_time".to_string(), format!("{span_time:.3}"));
                         response_sender.send(metrics).unwrap();
                         error_count.fetch_add(1, Ordering::Relaxed);
                     }
@@ -391,7 +385,9 @@ impl SummaryStats {
             self.ttft_values.push(ttft);
         }
         if let (Some(total_time), Some(output_length)) = (
-            metrics.get("total_time").and_then(|v| v.parse::<f64>().ok()),
+            metrics
+                .get("total_time")
+                .and_then(|v| v.parse::<f64>().ok()),
             metrics
                 .get("output_length")
                 .and_then(|v| v.parse::<f64>().ok()),
@@ -467,10 +463,7 @@ impl SummaryStats {
             "tpot_mean_ms".to_string(),
             format_ms(mean(&self.tpot_values)),
         );
-        summary.insert(
-            "e2e_mean_ms".to_string(),
-            format_ms(mean(&self.e2e_values)),
-        );
+        summary.insert("e2e_mean_ms".to_string(), format_ms(mean(&self.e2e_values)));
 
         Some(summary)
     }

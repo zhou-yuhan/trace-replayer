@@ -116,7 +116,10 @@ impl LLMTrace for BailianDataset {
     }
 
     fn iter(&self) -> DataIter {
-        DataIter { size: self.items.len(), index: AtomicUsize::new(0) }
+        DataIter {
+            size: self.items.len(),
+            index: AtomicUsize::new(0),
+        }
     }
 
     fn rps(&self) -> f64 {
@@ -141,7 +144,11 @@ impl LLMTrace for BailianDataset {
             let x = if last_block_len == BLOCK_SIZE { 0 } else { 1 };
             let mut prompt =
                 String::with_capacity(usize::next_power_of_two((*data_item).input_length as usize));
-            for &hash_id in (*data_item).hash_ids.iter().take((*data_item).hash_ids.len() - x) {
+            for &hash_id in (*data_item)
+                .hash_ids
+                .iter()
+                .take((*data_item).hash_ids.len() - x)
+            {
                 // loop invariant: rwlock is free
                 self.rwlock.read_lock();
                 if let Some(s) = (&*self.user_prompts.get()).get(&hash_id) {
@@ -170,7 +177,11 @@ impl LLMTrace for BailianDataset {
                 self.rwlock.write_unlock();
             }
 
-            (prompt, (*data_item).input_length, (*data_item).output_length)
+            (
+                prompt,
+                (*data_item).input_length,
+                (*data_item).output_length,
+            )
         }
     }
 }
@@ -207,7 +218,10 @@ impl LLMTrace for MooncakeDataset {
     }
 
     fn iter(&self) -> DataIter {
-        DataIter { size: self.items.len(), index: AtomicUsize::new(0) }
+        DataIter {
+            size: self.items.len(),
+            index: AtomicUsize::new(0),
+        }
     }
 
     fn rps(&self) -> f64 {
@@ -232,7 +246,11 @@ impl LLMTrace for MooncakeDataset {
             let x = if last_block_len == BLOCK_SIZE { 0 } else { 1 };
             let mut prompt =
                 String::with_capacity(usize::next_power_of_two((*data_item).input_length as usize));
-            for &hash_id in (*data_item).hash_ids.iter().take((*data_item).hash_ids.len() - x) {
+            for &hash_id in (*data_item)
+                .hash_ids
+                .iter()
+                .take((*data_item).hash_ids.len() - x)
+            {
                 // loop invariant: rwlock is free
                 self.rwlock.read_lock();
                 if let Some(s) = (&*self.user_prompts.get()).get(&hash_id) {
@@ -262,7 +280,11 @@ impl LLMTrace for MooncakeDataset {
                 self.rwlock.write_unlock();
             }
 
-            (prompt, (*data_item).input_length, (*data_item).output_length)
+            (
+                prompt,
+                (*data_item).input_length,
+                (*data_item).output_length,
+            )
         }
     }
 }

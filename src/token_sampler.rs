@@ -82,7 +82,12 @@ impl BatchSampleContext {
         let begin = 0;
         let rng = rand::thread_rng();
 
-        let mut ctx = Self { tokens, begin, batch_size, rng };
+        let mut ctx = Self {
+            tokens,
+            begin,
+            batch_size,
+            rng,
+        };
         ctx.reload(tokenizer);
 
         ctx
@@ -92,8 +97,9 @@ impl BatchSampleContext {
         // Continuously reload Batchsampler
         let vocab_size = tokenizer.get_vocab_size(true) as u32;
 
-        let tokens: Vec<u32> =
-            (0..self.batch_size).map(|_| self.rng.gen_range(0..vocab_size)).collect();
+        let tokens: Vec<u32> = (0..self.batch_size)
+            .map(|_| self.rng.gen_range(0..vocab_size))
+            .collect();
         let dec = tokenizer.decode(&tokens, false).unwrap_or_default();
         let enc = tokenizer.encode(dec, false).unwrap();
         self.tokens = enc.get_ids().to_owned();
@@ -159,7 +165,13 @@ impl TokenSampler {
         }
         tracing::info!("Warmup finished!");
 
-        Self { tokenizer, block_size, fst_rx, snd_cmd_tx, snd_data_rxs }
+        Self {
+            tokenizer,
+            block_size,
+            fst_rx,
+            snd_cmd_tx,
+            snd_data_rxs,
+        }
     }
 
     #[allow(unused)]
@@ -273,7 +285,11 @@ impl TokenSampler {
             }
 
             // verify the length
-            let reencoded_len = tokenizer.encode(result.clone(), false).unwrap().get_ids().len();
+            let reencoded_len = tokenizer
+                .encode(result.clone(), false)
+                .unwrap()
+                .get_ids()
+                .len();
             if reencoded_len == n {
                 // let duration = generate_time.elapsed();
                 // tracing::info!("Generated block of size {n} in {duration:?}");
@@ -428,7 +444,11 @@ impl TokenSampler {
                 asm_tokens.extend_from_slice(tokens);
                 asm_tokens.push(sep.eos_token.0);
                 let result = tokenizer.decode(&asm_tokens, false).unwrap_or_default();
-                let validate_len = tokenizer.encode(result.clone(), false).unwrap().get_ids().len();
+                let validate_len = tokenizer
+                    .encode(result.clone(), false)
+                    .unwrap()
+                    .get_ids()
+                    .len();
                 if validate_len < n {
                     miss += 1;
                     end += 1;
@@ -493,7 +513,9 @@ mod tests {
     ) -> (String, usize) {
         let mut rng = rand::thread_rng();
         let vocab_size = tokenizer.get_vocab_size(true) as u32;
-        let tokens: Vec<u32> = (0..2 * size).map(|_| rng.gen_range(0..vocab_size)).collect();
+        let tokens: Vec<u32> = (0..2 * size)
+            .map(|_| rng.gen_range(0..vocab_size))
+            .collect();
         let decoded = tokenizer.decode(&tokens, false).unwrap_or_default();
         let encoded = tokenizer.encode(decoded, false).unwrap();
         let mut all_tokens = encoded.get_ids().to_vec();
@@ -513,8 +535,11 @@ mod tests {
                 asm_tokens.extend_from_slice(tokens);
                 asm_tokens.push(QWEN2_EOS_TOKEN);
                 let result = tokenizer.decode(&asm_tokens, false).unwrap_or_default();
-                let reencoded_len =
-                    tokenizer.encode(result.clone(), false).unwrap().get_ids().len();
+                let reencoded_len = tokenizer
+                    .encode(result.clone(), false)
+                    .unwrap()
+                    .get_ids()
+                    .len();
                 if reencoded_len < stride {
                     miss += 1;
                     end += 1;
@@ -566,8 +591,11 @@ mod tests {
                 let (result, cnt) = validate_block_generation(&tokenizer, 2048, stride);
                 let elapsed = start.elapsed();
                 let elapsed_ms = (elapsed.as_secs_f64() * 1000.0 * 100.0).round() / 100.0; // keep two decimal places
-                let reencoded_len =
-                    tokenizer.encode(result.clone(), false).unwrap().get_ids().len();
+                let reencoded_len = tokenizer
+                    .encode(result.clone(), false)
+                    .unwrap()
+                    .get_ids()
+                    .len();
                 let s = if reencoded_len == cnt * 16 {
                     "OK"
                 } else {
@@ -580,6 +608,9 @@ mod tests {
             }
         }
         println!("--------------------------------");
-        println!("Speed: {:<4}ms/block | block size: {stride}", total_elapsed / total_cnt as f64);
+        println!(
+            "Speed: {:<4}ms/block | block size: {stride}",
+            total_elapsed / total_cnt as f64
+        );
     }
 }

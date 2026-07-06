@@ -126,10 +126,7 @@ impl LLMApi for OpenAIApi {
         }
 
         if !tbt_except_first.is_empty() {
-            let max_tbt_except_first = tbt_except_first
-                .iter()
-                .copied()
-                .fold(f64::MIN, f64::max);
+            let max_tbt_except_first = tbt_except_first.iter().copied().fold(f64::MIN, f64::max);
             result.insert(
                 "max_time_between_tokens_except_first".to_string(),
                 format!("{max_tbt_except_first:.3}"),
@@ -156,7 +153,8 @@ impl LLMApi for OpenAIApi {
         // need to sort for computing percentage
         if !tbt_values.is_empty() {
             let mut sorted_tbt = tbt_values.clone();
-            sorted_tbt.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            sorted_tbt
+                .sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
             let len = sorted_tbt.len();
             if len > 0 {
