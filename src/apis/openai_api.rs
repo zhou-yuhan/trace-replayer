@@ -1,7 +1,7 @@
 use super::{LLMApi, RequestError, METRIC_PERCENTILES, MODEL_NAME};
 use futures_util::TryStreamExt;
 use reqwest::Response;
-use serde_json::json;
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::time::Duration;
 use tokio::{
@@ -88,27 +88,47 @@ impl LLMApi for OpenAIApi {
                         if data_str == "[DONE]" {
                             break;
                         }
-                        if data_str.contains(r#""delta""#) {
-                            let now = TokioInstant::now();
-                            token_count += 1;
-
-                            if first_token_time.is_none() {
-                                first_token_time = Some(now);
-                                let first_token_duration =
-                                    now.duration_since(start_time).as_secs_f64() * 1000.0;
-                                result.insert(
-                                    "first_token_time".to_string(),
-                                    format!("{first_token_duration:.3}"),
-                                );
-                            } else if let Some(last) = last_token_time {
-                                let tbt = now.duration_since(last).as_secs_f64() * 1000.0;
-                                tbt_values.push(tbt);
-                                if token_count > 2 {
-                                    tbt_except_first.push(tbt);
+                        if let Ok(value) = serde_json::from_str::<Value>(data_str) {
+                            if !result.contains_key("response_id") {
+                                if let Some(response_id) =
+                                    value.get("id").and_then(|id| id.as_str())
+                                {
+                                    result
+                                        .insert("response_id".to_string(), response_id.to_string());
+                                    result.insert(
+                                        "openai_response_id".to_string(),
+                                        response_id.to_string(),
+                                    );
                                 }
                             }
 
-                            last_token_time = Some(now);
+                            if has_non_empty_delta_content(&value) {
+                                let now = TokioInstant::now();
+                                token_count += 1;
+
+                                if first_token_time.is_none() {
+                                    first_token_time = Some(now);
+                                    let first_token_duration =
+                                        now.duration_since(start_time).as_secs_f64() * 1000.0;
+                                    let first_token_duration = format!("{first_token_duration:.3}");
+                                    result.insert(
+                                        "first_token_time".to_string(),
+                                        first_token_duration.clone(),
+                                    );
+                                    result.insert(
+                                        "first_content_time".to_string(),
+                                        first_token_duration,
+                                    );
+                                } else if let Some(last) = last_token_time {
+                                    let tbt = now.duration_since(last).as_secs_f64() * 1000.0;
+                                    tbt_values.push(tbt);
+                                    if token_count > 2 {
+                                        tbt_except_first.push(tbt);
+                                    }
+                                }
+
+                                last_token_time = Some(now);
+                            }
                         }
                     }
                     line.clear();
@@ -175,5 +195,50 @@ impl LLMApi for OpenAIApi {
         }
 
         Ok(result)
+    }
+}
+
+fn has_non_empty_delta_content(value: &Value) -> bool {
+    value
+        .get("choices")
+        .and_then(|choices| choices.as_array())
+        .is_some_and(|choices| {
+            choices.iter().any(|choice| {
+                choice
+                    .get("delta")
+                    .and_then(|delta| delta.get("content"))
+                    .and_then(|content| content.as_str())
+                    .is_some_and(|content| !content.is_empty())
+            })
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::has_non_empty_delta_content;
+    use serde_json::json;
+
+    #[test]
+    fn role_only_delta_is_not_content() {
+        let value = json!({
+            "choices": [{
+                "delta": {"role": "assistant", "content": ""},
+                "finish_reason": null
+            }]
+        });
+
+        assert!(!has_non_empty_delta_content(&value));
+    }
+
+    #[test]
+    fn non_empty_content_delta_is_content() {
+        let value = json!({
+            "choices": [{
+                "delta": {"content": "hello"},
+                "finish_reason": null
+            }]
+        });
+
+        assert!(has_non_empty_delta_content(&value));
     }
 }

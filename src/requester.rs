@@ -8,7 +8,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures_util::stream::Count;
 use reqwest::Response;
 use tokio::{
     fs::File,
@@ -60,9 +59,27 @@ async fn post_with_timeout<A: 'static + LLMApi + Send>(
         );
     }
 
+    let request_start = Instant::now();
     let response = req.send().await.map_err(|e| RequestError::Other(e))?;
+    let response_header_time_ms = request_start.elapsed().as_secs_f64() * 1000.0;
 
-    A::parse_response(response, stream, timeout).await
+    let mut metrics = A::parse_response(response, stream, timeout).await?;
+    metrics.insert(
+        "response_header_time".to_string(),
+        format!("{response_header_time_ms:.3}"),
+    );
+    if let Some(first_content_ms) = metrics
+        .get("first_content_time")
+        .or_else(|| metrics.get("first_token_time"))
+        .and_then(|value| value.parse::<f64>().ok())
+    {
+        let client_e2e_ttft_ms = response_header_time_ms + first_content_ms;
+        metrics.insert(
+            "client_e2e_ttft_ms".to_string(),
+            format!("{client_e2e_ttft_ms:.3}"),
+        );
+    }
+    Ok(metrics)
 }
 
 async fn wait_all(handle_rx: flume::Receiver<JoinHandle<()>>, interrupt_flag: Arc<AtomicBool>) {
@@ -176,6 +193,16 @@ pub fn spawn_request_loop_with_timestamp<A: 'static + LLMApi + Send>(
 
                         let span_time = e_time - s_time;
                         metrics.insert("span_time".to_string(), format!("{span_time:.3}"));
+                        if let Some(client_e2e_ttft_ms) = metrics
+                            .get("client_e2e_ttft_ms")
+                            .and_then(|value| value.parse::<f64>().ok())
+                        {
+                            let first_content_arrival_time = s_time + client_e2e_ttft_ms;
+                            metrics.insert(
+                                "first_content_arrival_time".to_string(),
+                                format!("{first_content_arrival_time:.3}"),
+                            );
+                        }
                         response_sender.send(metrics).unwrap();
                     }
                     Err(RequestError::Timeout) => {
@@ -341,6 +368,7 @@ struct SummaryStats {
     ttft_values: Vec<f64>,
     tpot_values: Vec<f64>,
     e2e_values: Vec<f64>,
+    client_e2e_ttft_values: Vec<f64>,
 }
 
 impl SummaryStats {
@@ -354,6 +382,7 @@ impl SummaryStats {
             ttft_values: Vec::new(),
             tpot_values: Vec::new(),
             e2e_values: Vec::new(),
+            client_e2e_ttft_values: Vec::new(),
         }
     }
 
@@ -383,6 +412,12 @@ impl SummaryStats {
 
         if let Some(ttft) = metrics.get("first_token_time").and_then(|v| v.parse().ok()) {
             self.ttft_values.push(ttft);
+        }
+        if let Some(ttft) = metrics
+            .get("client_e2e_ttft_ms")
+            .and_then(|v| v.parse().ok())
+        {
+            self.client_e2e_ttft_values.push(ttft);
         }
         if let (Some(total_time), Some(output_length)) = (
             metrics
@@ -454,6 +489,13 @@ impl SummaryStats {
         for (percentile, value) in e2e {
             summary.insert(format!("e2e_p{percentile}_ms"), format_ms(value));
         }
+        let client_e2e_ttft = compute_percentiles(&mut self.client_e2e_ttft_values, percentiles);
+        for (percentile, value) in client_e2e_ttft {
+            summary.insert(
+                format!("client_e2e_ttft_p{percentile}_ms"),
+                format_ms(value),
+            );
+        }
 
         summary.insert(
             "ttft_mean_ms".to_string(),
@@ -464,6 +506,10 @@ impl SummaryStats {
             format_ms(mean(&self.tpot_values)),
         );
         summary.insert("e2e_mean_ms".to_string(), format_ms(mean(&self.e2e_values)));
+        summary.insert(
+            "client_e2e_ttft_mean_ms".to_string(),
+            format_ms(mean(&self.client_e2e_ttft_values)),
+        );
 
         Some(summary)
     }
