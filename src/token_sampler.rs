@@ -18,7 +18,7 @@ struct TokenSeparater {
 }
 
 impl TokenSeparater {
-    pub fn new(path: &str) -> Self {
+    pub fn new(tokenizer: &Tokenizer, path: &str) -> Self {
         let data = fs::read_to_string(path).expect("Failed to read tokenizer config file");
         let config_json: Value =
             serde_json::from_str(&data).expect("Failed to parse tokenizer config file as JSON");
@@ -30,11 +30,21 @@ impl TokenSeparater {
                     eos_token: Self::find_added_token(&config_json, "<|im_end|>"),
                     pad_token: Self::find_added_token(&config_json, "<|endoftext|>"),
                 };
-            } else {
-                unimplemented!("Currently support Qwen2/Qwen2.5 class model");
             }
-        } else {
-            unimplemented!("Currently support Qwen2/Qwen2.5 class model");
+        }
+
+        let eos_token = Self::special_token_content(&config_json, "eos_token")
+            .unwrap_or_else(|| "<|endoftext|>".to_owned());
+        let pad_token =
+            Self::special_token_content(&config_json, "pad_token").unwrap_or(eos_token.clone());
+        let bos_token = Self::special_token_content(&config_json, "bos_token")
+            .or_else(|| Self::find_extra_special_token(&config_json, "<sop>"))
+            .unwrap_or_else(|| eos_token.clone());
+
+        TokenSeparater {
+            bos_token: Self::find_tokenizer_token(tokenizer, &bos_token),
+            eos_token: Self::find_tokenizer_token(tokenizer, &eos_token),
+            pad_token: Self::find_tokenizer_token(tokenizer, &pad_token),
         }
     }
 
@@ -57,6 +67,35 @@ impl TokenSeparater {
                 .unwrap_or_else(|_| panic!("Invalid token id {id} for added token {content}")),
             content.to_owned(),
         )
+    }
+
+    fn special_token_content(config_json: &Value, key: &str) -> Option<String> {
+        let value = config_json.get(key)?;
+        if let Some(content) = value.as_str() {
+            return Some(content.to_owned());
+        }
+        value
+            .as_object()
+            .and_then(|obj| obj.get("content"))
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    }
+
+    fn find_extra_special_token(config_json: &Value, content: &str) -> Option<String> {
+        config_json
+            .get("extra_special_tokens")
+            .and_then(Value::as_array)?
+            .iter()
+            .filter_map(Value::as_str)
+            .find(|token| *token == content)
+            .map(str::to_owned)
+    }
+
+    fn find_tokenizer_token(tokenizer: &Tokenizer, content: &str) -> (u32, String) {
+        let id = tokenizer
+            .token_to_id(content)
+            .unwrap_or_else(|| panic!("Tokenizer does not contain single token {content}"));
+        (id, content.to_owned())
     }
 }
 
@@ -121,7 +160,7 @@ impl TokenSampler {
         channel_capacity: usize,
         block_size: usize,
     ) -> Self {
-        let sep = TokenSeparater::new(&tokenizer_config_path);
+        let sep = TokenSeparater::new(&tokenizer, &tokenizer_config_path);
 
         // Primary (fst) channel for full blocks
         // 128K blocks => 1M tokens => ~10MB memory

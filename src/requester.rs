@@ -563,7 +563,7 @@ mod tests {
         let _ = tracing::subscriber::set_global_default(subscriber);
 
         // ====== 准备 dataset ======
-        let mut dataset = BailianDataset::new();
+        let mut dataset = BailianDataset::new(16);
         dataset.load("/Users/zdy/Workspace/Rust/request-sim/data/qwen-bailian-usagetraces-anon-main/qwen_traceA_blksz_16.jsonl"); // 你要准备一个小的测试文件
 
         let dataset = Arc::new(Box::pin(dataset) as Pin<Box<dyn LLMTrace>>);

@@ -90,14 +90,16 @@ pub struct BailianDataset {
     items: Vec<BailianDataItem>,
     user_prompts: UnsafeCell<HashMap<u64, String>>,
     rwlock: SpinRwLock,
+    block_size: usize,
 }
 
 impl BailianDataset {
-    pub fn new() -> Self {
+    pub fn new(block_size: usize) -> Self {
         Self {
             items: Vec::new(),
             user_prompts: UnsafeCell::new(HashMap::new()),
             rwlock: SpinRwLock::new(),
+            block_size,
         }
     }
 }
@@ -134,14 +136,14 @@ impl LLMTrace for BailianDataset {
     #[instrument(skip_all, target = "inflate", fields(chat_id = index), level = Level::INFO)]
     fn inflate(&self, index: usize, ts: &TokenSampler) -> (String, u64, u64) {
         // NOTE: the last block hash may be hashed onto a partially filled block
-        const BLOCK_SIZE: usize = 16;
+        let block_size = self.block_size;
         unsafe {
             let data_item = self.items.get(index).unwrap();
             let last_block_len =
-                (*data_item).input_length as usize - ((*data_item).hash_ids.len() - 1) * BLOCK_SIZE;
-            debug_assert!(last_block_len <= BLOCK_SIZE);
+                (*data_item).input_length as usize - ((*data_item).hash_ids.len() - 1) * block_size;
+            debug_assert!(last_block_len <= block_size);
 
-            let x = if last_block_len == BLOCK_SIZE { 0 } else { 1 };
+            let x = if last_block_len == block_size { 0 } else { 1 };
             let mut prompt =
                 String::with_capacity(usize::next_power_of_two((*data_item).input_length as usize));
             for &hash_id in (*data_item)
@@ -156,7 +158,7 @@ impl LLMTrace for BailianDataset {
                     self.rwlock.read_unlock();
                 } else {
                     self.rwlock.read_unlock();
-                    let s = ts.gen_string(BLOCK_SIZE);
+                    let s = ts.gen_string(block_size);
                     self.rwlock.write_lock();
                     if let Some(s0) = (*self.user_prompts.get()).get(&hash_id) {
                         prompt.push_str(&s0);
@@ -193,14 +195,16 @@ pub struct MooncakeDataset {
     items: Vec<MooncakeDataItem>,
     user_prompts: UnsafeCell<HashMap<u64, String>>,
     rwlock: SpinRwLock,
+    block_size: usize,
 }
 
 impl MooncakeDataset {
-    pub fn new() -> Self {
+    pub fn new(block_size: usize) -> Self {
         Self {
             items: Vec::new(),
             user_prompts: UnsafeCell::new(HashMap::new()),
             rwlock: SpinRwLock::new(),
+            block_size,
         }
     }
 }
@@ -236,14 +240,14 @@ impl LLMTrace for MooncakeDataset {
 
     fn inflate(&self, index: usize, ts: &TokenSampler) -> (String, u64, u64) {
         // NOTE: the last block hash may be hashed onto a partially filled block
-        const BLOCK_SIZE: usize = 512;
+        let block_size = self.block_size;
         unsafe {
             let data_item = self.items.get(index).unwrap();
             let last_block_len =
-                (*data_item).input_length as usize - ((*data_item).hash_ids.len() - 1) * BLOCK_SIZE;
-            debug_assert!(last_block_len <= BLOCK_SIZE);
+                (*data_item).input_length as usize - ((*data_item).hash_ids.len() - 1) * block_size;
+            debug_assert!(last_block_len <= block_size);
 
-            let x = if last_block_len == BLOCK_SIZE { 0 } else { 1 };
+            let x = if last_block_len == block_size { 0 } else { 1 };
             let mut prompt =
                 String::with_capacity(usize::next_power_of_two((*data_item).input_length as usize));
             for &hash_id in (*data_item)
@@ -258,7 +262,7 @@ impl LLMTrace for MooncakeDataset {
                     self.rwlock.read_unlock();
                 } else {
                     self.rwlock.read_unlock();
-                    let s = ts.gen_string(BLOCK_SIZE);
+                    let s = ts.gen_string(block_size);
                     self.rwlock.write_lock();
                     if let Some(s0) = (*self.user_prompts.get()).get(&hash_id) {
                         prompt.push_str(&s0);

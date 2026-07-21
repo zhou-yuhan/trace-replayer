@@ -14,6 +14,7 @@ This document describes all command-line arguments supported by **Trace-Replayer
 | `--api`, `-a`        | `String`         | LLM API type: `tgi`, `openai`, or `aibrix`.                                                              |
 | `--dataset`, `-d`    | `String`         | Dataset type: `bailian`, `mooncake`, `azure`.                                                            |
 | `--dataset-path`     | `Option<String>` | Path to the dataset file.                                                                                |
+| `--hash-block-size`  | `Option<usize>`  | Hash block size used by the trace. Defaults to 16 for `bailian` and 512 for `mooncake`.                  |
 
 
 ## Request Rate Control

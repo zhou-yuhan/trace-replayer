@@ -61,6 +61,10 @@ struct Args {
     #[clap(long, required = true)]
     dataset_path: Option<String>,
 
+    /// Hash block size used by the trace. Defaults to 16 for bailian and 512 for mooncake.
+    #[clap(long)]
+    hash_block_size: Option<usize>,
+
     /// Scale factor for the request rate. It only takes effect when `replay_mode` is enabled.
     ///
     /// For example, if the scale factor is 2 the client will send requests at twice the rate of the original data set.
@@ -122,6 +126,7 @@ async fn async_main(args: Args) -> Result<(), i32> {
         api,
         dataset,
         dataset_path,
+        hash_block_size,
         scale_factor,
         output_path,
         summary_path,
@@ -166,12 +171,13 @@ async fn async_main(args: Args) -> Result<(), i32> {
         .await
         .unwrap();
 
-    let block_size;
+    let block_size: usize;
 
     let dataset: Pin<Box<dyn LLMTrace>> = match dataset.to_lowercase().as_str() {
         "mooncake" => {
-            let mut dataset: Pin<Box<MooncakeDataset>> = Box::pin(MooncakeDataset::new());
-            block_size = 512;
+            block_size = hash_block_size.unwrap_or(512);
+            assert!(block_size > 0, "--hash-block-size must be positive");
+            let mut dataset: Pin<Box<MooncakeDataset>> = Box::pin(MooncakeDataset::new(block_size));
             dataset.load(
                 dataset_path
                     .expect("A dataset path must be provided in replay mode!")
@@ -180,8 +186,9 @@ async fn async_main(args: Args) -> Result<(), i32> {
             dataset
         }
         "bailian" => {
-            let mut dataset = Box::pin(BailianDataset::new());
-            block_size = 16;
+            block_size = hash_block_size.unwrap_or(16);
+            assert!(block_size > 0, "--hash-block-size must be positive");
+            let mut dataset = Box::pin(BailianDataset::new(block_size));
             dataset.load(
                 dataset_path
                     .expect("A dataset path must be provided in replay mode!")
